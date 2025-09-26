@@ -128,7 +128,7 @@ def enable_commands(enabled):
 
 root = tk.Tk()
 root.title("Cliente Vehículo Autónomo - Python")
-root.geometry("420x420")
+root.geometry("")
 
 # --- Frame de login ---
 frame_login = tk.LabelFrame(root, text="Login", padx=10, pady=10)
