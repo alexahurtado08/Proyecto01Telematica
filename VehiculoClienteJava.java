@@ -6,27 +6,26 @@ import java.util.concurrent.Executors;
 
 public class VehiculoClienteJava extends JFrame {
 
-    // Variables de red 
-    private Socket socket;                 // Socket TCP para conexión con el servidor
-    private PrintWriter out;               // Para enviar mensajes al servidor
-    private BufferedReader in;             // Para leer respuestas del servidor
-    private String sessionToken = null;    // Token de sesión al hacer login como admin
-    private boolean isObserver = false;    // Bandera para saber si el cliente es observador
+    // Variables de red
+    private Socket socket;
+    private PrintWriter out;
+    private BufferedReader in;
+    private String sessionToken = null;
+    private boolean isObserver = false;
 
-    // Componentes de la interfaz gráfica 
+    // Componentes de la interfaz gráfica
     private JTextField txtUsuario, txtPassword;
     private JLabel lblVelocidad, lblBateria, lblTemp, lblDir;
     private JButton btnLogin, btnAcelerar, btnFrenar, btnIzquierda, btnDerecha, btnConectar, btnSalir, btnObservador;
 
     public VehiculoClienteJava() {
-        // Configuración principal de la ventana
         setTitle("Cliente Vehículo Autónomo - Java");
-        setSize(420, 420);
+        setSize(450, 550);
         setDefaultCloseOperation(EXIT_ON_CLOSE);
-        setLayout(new BorderLayout());
+        setLayout(new BoxLayout(getContentPane(), BoxLayout.Y_AXIS));
 
-        // Panel de Login 
-        JPanel panelLogin = new JPanel(new GridLayout(3, 2));
+        // ---------------- Panel de Login ----------------
+        JPanel panelLogin = new JPanel(new GridLayout(3, 2, 5, 5));
         panelLogin.setBorder(BorderFactory.createTitledBorder("Login"));
 
         panelLogin.add(new JLabel("Usuario:"));
@@ -43,10 +42,10 @@ public class VehiculoClienteJava extends JFrame {
         btnObservador = new JButton("Entrar como Observador");
         panelLogin.add(btnObservador);
 
-        add(panelLogin, BorderLayout.NORTH);
+        add(panelLogin);
 
-        //  Panel de Telemetría 
-        JPanel panelTel = new JPanel(new GridLayout(4, 1));
+        // ---------------- Panel de Telemetría ----------------
+        JPanel panelTel = new JPanel(new GridLayout(4, 1, 5, 5));
         panelTel.setBorder(BorderFactory.createTitledBorder("Telemetría"));
 
         lblVelocidad = new JLabel("Velocidad: -- km/h");
@@ -59,10 +58,10 @@ public class VehiculoClienteJava extends JFrame {
         panelTel.add(lblTemp);
         panelTel.add(lblDir);
 
-        add(panelTel, BorderLayout.CENTER);
+        add(panelTel);
 
-        // Panel de Comandos 
-        JPanel panelCmd = new JPanel(new GridLayout(2, 2));
+        // ---------------- Panel de Comandos ----------------
+        JPanel panelCmd = new JPanel(new GridLayout(2, 2, 10, 10));
         panelCmd.setBorder(BorderFactory.createTitledBorder("Comandos"));
 
         btnAcelerar = new JButton("SPEED UP");
@@ -75,42 +74,43 @@ public class VehiculoClienteJava extends JFrame {
         panelCmd.add(btnIzquierda);
         panelCmd.add(btnDerecha);
 
-        add(panelCmd, BorderLayout.SOUTH);
+        add(panelCmd);
 
-        //  Panel inferior (conectar/salir) 
-        JPanel panelInferior = new JPanel();
+        // ---------------- Panel Inferior ----------------
+        JPanel panelInferior = new JPanel(new FlowLayout());
         btnConectar = new JButton("Conectar Servidor");
         btnSalir = new JButton("Salir");
         panelInferior.add(btnConectar);
         panelInferior.add(btnSalir);
 
-        add(panelInferior, BorderLayout.PAGE_END);
+        add(panelInferior);
 
-        //  Acciones de los botones
+        // ---------------- Acciones de botones ----------------
         btnConectar.addActionListener(e -> conectarServidor());
         btnLogin.addActionListener(e -> enviarLogin());
         btnObservador.addActionListener(e -> entrarObservador());
         btnSalir.addActionListener(e -> salir());
 
+        // Botones ahora solo envían comandos al servidor
         btnAcelerar.addActionListener(e -> enviarComando("SPEED UP"));
         btnFrenar.addActionListener(e -> enviarComando("SLOW DOWN"));
         btnIzquierda.addActionListener(e -> enviarComando("TURN LEFT"));
         btnDerecha.addActionListener(e -> enviarComando("TURN RIGHT"));
 
-        // Comandos desactivados por defecto (solo admin puede usarlos)
+        // Comandos desactivados por defecto
         setComandosEnabled(false);
     }
 
-    // Conexión al servidor 
+    // ---------------- Conexión al servidor ----------------
     private void conectarServidor() {
         try {
-            socket = new Socket("127.0.0.1", 5000); // Conexión TCP al servidor
+            socket = new Socket("127.0.0.1", 5000);
             out = new PrintWriter(socket.getOutputStream(), true);
             in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
 
-            JOptionPane.showMessageDialog(this, "Conectado al servidor ");
+            JOptionPane.showMessageDialog(this, "Conectado al servidor");
 
-            // Hilo para escuchar mensajes del servidor en segundo plano
+            // Escuchar mensajes del servidor en un hilo separado
             Executors.newSingleThreadExecutor().execute(this::escucharServidor);
 
         } catch (IOException e) {
@@ -118,39 +118,55 @@ public class VehiculoClienteJava extends JFrame {
         }
     }
 
-    //  Escuchar mensajes del servidor 
     private void escucharServidor() {
         try {
             String linea;
             while ((linea = in.readLine()) != null) {
-                // Respuesta al login (OK + token)
+                System.out.println("DEBUG - Recibido: " + linea);
+                
                 if (linea.startsWith("200 OK SESSION")) {
                     String[] partes = linea.split(" ");
                     sessionToken = partes[3];
-                    JOptionPane.showMessageDialog(this, "Sesión iniciada. Token: " + sessionToken);
-                    setComandosEnabled(true);
-
-                // Recepción de telemetría en JSON
+                    SwingUtilities.invokeLater(() -> {
+                        JOptionPane.showMessageDialog(this, "Sesión iniciada como Administrador.\nToken: " + sessionToken);
+                        setComandosEnabled(true);
+                    });
+                    isObserver = false;
                 } else if (linea.startsWith("TELEMETRY")) {
-                    String jsonBody = in.readLine(); // El JSON viene en la siguiente línea
-                    actualizarTelemetria(jsonBody);
-
-                } else {
-                    System.out.println("Servidor: " + linea);
+                    // Leer las siguientes líneas hasta encontrar el JSON
+                    StringBuilder message = new StringBuilder();
+                    message.append(linea).append("\n");
+                    
+                    // Leer headers
+                    while ((linea = in.readLine()) != null && !linea.isEmpty()) {
+                        message.append(linea).append("\n");
+                    }
+                    
+                    // Leer cuerpo JSON
+                    if (linea != null && linea.isEmpty()) {
+                        String jsonLine = in.readLine();
+                        if (jsonLine != null && jsonLine.startsWith("{")) {
+                            actualizarTelemetria(jsonLine);
+                        }
+                    }
+                } else if (linea.startsWith("OK Command executed")) {
+                    System.out.println("Comando ejecutado exitosamente");
+                } else if (linea.startsWith("ERROR")) {
+                    System.out.println("Error del servidor: " + linea);
                 }
             }
         } catch (IOException e) {
-            JOptionPane.showMessageDialog(this, "Conexión cerrada");
+            SwingUtilities.invokeLater(() -> 
+                JOptionPane.showMessageDialog(this, "Conexión cerrada: " + e.getMessage()));
         }
     }
 
-    // Enviar login como admin 
+    // ---------------- Enviar login y comandos ----------------
     private void enviarLogin() {
         isObserver = false;
         String usuario = txtUsuario.getText();
         String pass = txtPassword.getText();
 
-        // Mensaje LOGIN según protocolo VAT-P
         String msg = "LOGIN / VAT-P/1.0\r\n" +
                      "Username: " + usuario + "\r\n" +
                      "Password: " + pass + "\r\n" +
@@ -158,49 +174,64 @@ public class VehiculoClienteJava extends JFrame {
         out.println(msg);
     }
 
-    //  Entrar como observador 
     private void entrarObservador() {
         isObserver = true;
         sessionToken = null;
-        JOptionPane.showMessageDialog(this, "Entraste como observador \nSolo recibirás telemetría.");
-        setComandosEnabled(false); // Observador no puede enviar comandos
+        JOptionPane.showMessageDialog(this, "Entraste como observador.\nSolo recibirás telemetría.");
+        setComandosEnabled(false);
     }
 
-    // Enviar un comando al vehículo 
     private void enviarComando(String cmd) {
         if (sessionToken != null && !isObserver) {
             String msg = "CMD /control VAT-P/1.0\r\n" +
-                         "Session: " + sessionToken + "\r\n" +
-                         "Command: " + cmd + "\r\n\r\n";
+                        "Session: " + sessionToken + "\r\n" +
+                        "Command: " + cmd + "\r\n\r\n";
             out.println(msg);
+            
+            // Opcional: Mostrar confirmación
+            JOptionPane.showMessageDialog(this, "Comando enviado: " + cmd);
         } else {
-            JOptionPane.showMessageDialog(this, " Solo los administradores pueden enviar comandos.");
+            JOptionPane.showMessageDialog(this, "Solo los administradores pueden enviar comandos.");
         }
-    }
+    }   
 
-    //  Mostrar la telemetría en los labels 
+    // ---------------- Actualización de labels ----------------
     private void actualizarTelemetria(String json) {
         SwingUtilities.invokeLater(() -> {
-            if (json.contains("speed")) lblVelocidad.setText("Velocidad: " + extraerValor(json, "speed") + " km/h");
-            if (json.contains("battery")) lblBateria.setText("Batería: " + extraerValor(json, "battery") + " %");
-            if (json.contains("temperature")) lblTemp.setText("Temperatura: " + extraerValor(json, "temperature") + " °C");
-            if (json.contains("direction")) lblDir.setText("Dirección: " + extraerValor(json, "direction"));
+            lblVelocidad.setText("Velocidad: " + getValor(json,"speed") + " km/h");
+            lblBateria.setText("Batería: " + getValor(json,"battery") + " %");
+            lblTemp.setText("Temperatura: " + getValor(json,"temperature") + " °C");
+            lblDir.setText("Dirección: " + getValor(json,"direction"));
         });
     }
 
-    //  Extraer valores de un JSON simple (sin librerías) 
-    private String extraerValor(String json, String campo) {
+    private String getValor(String json, String key) {
         try {
-            int start = json.indexOf(campo) + campo.length() + 3;
+            String search = "\"" + key + "\":";
+            int start = json.indexOf(search);
+            if (start == -1) return "--";
+            
+            start += search.length();
+            
+            // Buscar el valor
             int end = json.indexOf(",", start);
             if (end == -1) end = json.indexOf("}", start);
-            return json.substring(start, end).replace("\"", "");
-        } catch (Exception e) {
-            return "--";
+            if (end == -1) return "--";
+            
+            String val = json.substring(start, end).trim();
+            
+            // Remover comillas si las tiene
+            if (val.startsWith("\"")) {
+                val = val.replace("\"", "");
+            }
+            
+            return val;
+        } catch(Exception e) { 
+            System.err.println("Error parsing JSON key '" + key + "': " + e.getMessage());
+            return "--"; 
         }
     }
 
-    // Habilitar/deshabilitar botones de comandos 
     private void setComandosEnabled(boolean enabled) {
         btnAcelerar.setEnabled(enabled);
         btnFrenar.setEnabled(enabled);
@@ -208,18 +239,14 @@ public class VehiculoClienteJava extends JFrame {
         btnDerecha.setEnabled(enabled);
     }
 
-    // Salir del programa 
     private void salir() {
         try {
-            if (out != null) out.println("QUIT / VAT-P/1.0\r\n\r\n");
-            if (socket != null) socket.close();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+            if(out != null) out.println("QUIT / VAT-P/1.0\r\n\r\n");
+            if(socket != null) socket.close();
+        } catch (IOException e) { e.printStackTrace(); }
         System.exit(0);
     }
 
-    //  Método principal 
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> new VehiculoClienteJava().setVisible(true));
     }
