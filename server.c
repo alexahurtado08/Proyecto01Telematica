@@ -35,9 +35,22 @@ void send_client(int sock, const char *msg) {
     send(sock, msg, strlen(msg), 0);
 }
 
-// Enviar telemetría (JSON). Importante: NO poner CRLF después del JSON
+// Enviar telemetría en JSON
 void broadcast_telemetry() {
     char buffer[512];
+
+    // --- Ajustar temperatura en función de la velocidad ---
+    if (vehicle.speed >= 15) {
+        vehicle.temperature += 0.5;  // si se mueve, se calienta
+    } else {
+        vehicle.temperature -= 0.2;  // si está quieto, se enfría poco a poco
+    }
+
+    // límites
+    if (vehicle.temperature < 20.0) vehicle.temperature = 20.0;
+    if (vehicle.temperature > 100.0) vehicle.temperature = 100.0;
+
+    // --- Armar mensaje de telemetría ---
     snprintf(buffer, sizeof(buffer),
         "TELEMETRY VAT-P/1.0\r\n"
         "Content-Type: application/json\r\n\r\n"
@@ -152,8 +165,8 @@ void *client_handler(void *arg) {
             if(strcmp(clients[idx].role,"ADMIN")==0 && (token_recv[0]==0 || strcmp(token_recv,clients[idx].session)==0)){
                 process_command(buffer);
                 send_client(sock,"OK Command executed\r\n");
-                printf("[*] CMD ejecutado por %s. velocidad=%.1f battery=%d dir=%s\n",
-                    clients[idx].id, vehicle.speed, vehicle.battery, vehicle.direction);
+                printf("[*] CMD ejecutado por %s. velocidad=%.1f battery=%d temp=%.1f dir=%s\n",
+                    clients[idx].id, vehicle.speed, vehicle.battery, vehicle.temperature, vehicle.direction);
             } else {
                 send_client(sock,"ERROR 403 Forbidden\r\n");
             }
