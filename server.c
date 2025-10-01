@@ -41,9 +41,9 @@ void broadcast_telemetry() {
 
     // --- Ajustar temperatura en función de la velocidad ---
     if (vehicle.speed >= 15) {
-        vehicle.temperature += 0.5;  // si se mueve, se calienta
+        vehicle.temperature += 0.5;  // si se mueve rapido, se calienta
     } else {
-        vehicle.temperature -= 0.2;  // si está quieto, se enfría poco a poco
+        vehicle.temperature -= 0.2;  // si está quieto o se mueve lento, se enfría poco a poco
     }
 
     // límites
